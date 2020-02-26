@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.ndimage import map_coordinates
+import math
 
 
 def xyzcube(face_w):
@@ -35,7 +36,111 @@ def xyzcube(face_w):
     out[:, 5*face_w:6*face_w, 1] = -0.5
 
     return out
+    
+def xyz_rectsides(face_w, face_h, new_z):
+    #return xyz for 4 surrounding sides of prism
+    
+    #return empty array with correct dimensions
+    out = np.zeros((face_h, face_w*4, 3), np.float32)
+    
+    #calc ratio of w to h
+    w_fraction = face_w /(face_w + face_h)
+    h_fraction = face_h /(face_w + face_h)
+    
+    #centered rectangle to be copied over each sides
+    rng_w = np.linspace(-w_fraction, w_fraction, num=face_w, dtype=np.float32)
+    rng_h = np.linspace(-h_fraction, h_fraction, num=face_h, dtype=np.float32)
+    
+    #create rectangle grid
+    grid = np.stack(np.meshgrid(rng_w, -rng_h), -1)
+    
+    # Front face (z = 0.5)
+    out[:, 0*face_w:1*face_w, [0, 1]] = grid
+    out[:, 0*face_w:1*face_w, 2] = new_z
 
+    # Right face (x = 0.5)
+    out[:, 1*face_w:2*face_w, [2, 1]] = grid
+    out[:, 1*face_w:2*face_w, 0] = new_z
+
+    # Back face (z = -0.5)
+    out[:, 2*face_w:3*face_w, [0, 1]] = grid
+    out[:, 2*face_w:3*face_w, 2] = -new_z
+
+    # Left face (x = -0.5)
+    out[:, 3*face_w:4*face_w, [2, 1]] = grid
+    out[:, 3*face_w:4*face_w, 0] = -new_z
+    
+    return out
+    
+    
+def xyz_nsides(w,phi,n):
+    
+    #calculate theta based on polygon
+    theta = math.pi / n
+    
+    #radius of cylinder based on z=0.5 for cube
+    r = 0.5 * math.sqrt(2) * math.cos(phi)
+    
+    #radius of cylinder based on pixel width 
+    big_r = w / (2*math.sin(theta))
+    
+    #length from center to polygon inner radius
+    z = r * math.cos(theta)
+    
+    #pixel height of new image
+    h = int(2* big_r * math.tan(phi))
+    
+   
+
+    
+    # Prepare the data
+    p = 2*z*math.tan(theta)
+    q = 2*z*math.tan(phi)
+    rect_w = np.linspace(-p/2,p/2,num=w, dtype=np.float32)
+    rect_h = np.linspace(-q/2,q/2,num=h, dtype=np.float32)
+    out = np.zeros((h, w*n, 3), np.float32)
+    
+    for a in range(n):
+        angle = theta * a * 2
+        
+        # take each rect and rotate it (just the p's) around the z axis by increments of theta
+        # top view x,y
+        coord = np.array([np.ones(w)*z,rect_w]).T 
+        
+        #calculate rect_w  and z for a given side
+        new_coord = rotate_points(coord,angle)
+        
+        #if(angle > 1.57 and angle < 3.14):
+        #    depth = np.flip(new_coord[:,0])
+        #else: 
+        depth = new_coord[:,0]
+        
+        #if(angle > 3.14 and angle < math.pi*3/2):
+        #    y = np.flip(new_coord[:,1])
+        #else:
+        y = new_coord[:,1]
+        #pull the x value of each coord
+        
+
+        #calculate full_rect for that side
+        full_rect = np.stack(np.meshgrid(y, -rect_h),axis=-1)
+        
+        #plot 3d coordinates for a side (y,z,x)
+        # dimensions are [h,w,coords]
+        out[:, a*w:(a+1)*w, [0, 1]] = full_rect
+        out[:, a*w:(a+1)*w, 2] = depth
+    
+    return out
+
+
+def rotate_points(points, theta):
+    rot = 1 * theta
+    rot_mat = np.array([[math.cos(rot),-math.sin(rot)],[math.sin(rot),math.cos(rot)]])
+    
+    for num,x in enumerate(points):
+        points[num] = rot_mat.dot(x)
+    
+    return points
 
 def equirect_uvgrid(h, w):
     u = np.linspace(-np.pi, np.pi, num=w, dtype=np.float32)
@@ -210,6 +315,20 @@ def cube_h2dice(cube_h):
             face = np.flip(face, axis=0)
         cube_dice[sy*w:(sy+1)*w, sx*w:(sx+1)*w] = face
     return cube_dice
+    
+def cube_h2NCSU(cube_h,sides=4):
+    h = cube_h.shape[0]
+    w = cube_h.shape[1]
+    face_w = int(w/sides)
+    rect_corrected = np.zeros((h,w, cube_h.shape[2]), dtype = cube_h.dtype)
+    rect_list = np.split(cube_h, sides, axis=1)
+    for i in range(sides):
+        face = rect_list[i]
+        print(face.shape)
+        #if i in [1,2]:
+        #   face = np.flip(face, axis=1)
+        rect_corrected[0:h,i*face_w:(i+1)*face_w] = face
+    return rect_corrected
 
 
 def cube_dice2h(cube_dice):
