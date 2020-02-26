@@ -118,3 +118,34 @@ cube_dict["F"].shape: (256, 256, 3)
 len(cube_list): 6
 cube_list[0].shape: (256, 256, 3)
 ```
+
+# Justin's Addition: Projection Mapping for an n-sided prism
+
+My usage is in the file convert2.py under /tests 
+
+## Usage
+```python
+
+import py360convert
+import math
+import numpy as np
+from PIL import Image
+
+#input image
+x = np.array(Image.open('x.png'))
+
+#this will produce a rectangular prism mapping
+n = 4
+
+#output image in pixels (height, width)
+face_w = 1000
+
+#angle from the horizon
+#i used different angles to get a sense for usage with a multi projector room
+for phi in np.arange(0.5, 1.5, 0.2):
+    y = py360convert.e2n(x, face_w, phi,sides=n)
+    im = Image.fromarray(np.uint8((y)))
+    im.save('img' + str(phi) + '.png', 'PNG')
+
+
+```
